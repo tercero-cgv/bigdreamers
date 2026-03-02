@@ -107,13 +107,13 @@
     </div>
   </div>
   <div class="mode-toggle">
-    <button class="mode-btn active" onclick="setMode('maestro')">🏫 Maestro</button>
-    <button class="mode-btn" onclick="setMode('estudiante')">🎒 Estudiante</button>
+    <button class="mode-btn" onclick="setMode('maestro')">🏫 Maestro</button>
+    <button class="mode-btn active" onclick="setMode('estudiante')">🎒 Estudiante</button>
   </div>
 </div>
 
 <!-- VISTA MAESTRO -->
-<div id="view-maestro" class="view active">
+<div id="view-maestro" class="view">
 
   <div style="display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
     <span style="font-size:12px; font-weight:700; color:var(--muted);">💾 Respaldo de datos:</span>
@@ -252,7 +252,7 @@
 </div>
 
 <!-- VISTA ESTUDIANTE -->
-<div id="view-estudiante" class="view">
+<div id="view-estudiante" class="view active">
   <div id="login-screen">
     <div class="login-box">
       <div class="big-icon">🎒</div>
@@ -934,6 +934,7 @@ async function init() {
   mostrarLoading(false);
   renderEstudiantes();
   renderInstrumentos();
+  await renderLoginSelect();
   document.getElementById('busqueda-estudiante')?.addEventListener('input', filtrarEstudiantes);
 }
 init();
