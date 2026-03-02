@@ -226,7 +226,7 @@
         </div>
         <div class="table-wrap mt-16">
           <table class="score-table">
-            <thead><tr><th>Estudiante</th><th>Puntos obtenidos</th><th>Porcentaje</th><th>Nota</th></tr></thead>
+            <thead><tr><th>Estudiante</th><th>Puntos obtenidos</th><th>Exento</th><th>Porcentaje</th><th>Nota</th></tr></thead>
             <tbody id="tbody-puntuaciones"></tbody>
           </table>
         </div>
@@ -365,7 +365,7 @@ function promedioEstudiante(eId) {
   let pos=0, obt=0, tiene=false;
   data.instrumentos.forEach(inst => {
     const v = punts[inst.id];
-    if (v !== undefined && v !== '') { pos += inst.valor; obt += Number(v); tiene = true; }
+    if (v !== undefined && v !== '' && v !== 'E') { pos += inst.valor; obt += Number(v); tiene = true; }
   });
   if (!tiene || pos === 0) return null;
   return Math.round((obt/pos)*1000)/10;
@@ -576,24 +576,57 @@ function cargarPuntuaciones() {
   const tbody = document.getElementById('tbody-puntuaciones');
   const sorted = [...estudiantesGlobal].sort((a,b) => a.nombre.localeCompare(b.nombre,'es'));
   if (!sorted.length) {
-    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><p>No hay estudiantes registrados.</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><p>No hay estudiantes registrados.</p></div></td></tr>`;
     return;
   }
   tbody.innerHTML = sorted.map(e => {
-    const val = (data.puntuaciones[e.id]&&data.puntuaciones[e.id][instId]!==undefined)
-      ? data.puntuaciones[e.id][instId] : '';
-    const pct  = val !== '' ? ((Number(val)/inst.valor)*100).toFixed(1) : '--';
-    const nota = pct !== '--' ? calcGrade(parseFloat(pct)) : '--';
-    return `<tr>
+    const puntsE   = data.puntuaciones[e.id] || {};
+    const esExento = puntsE[instId] === 'E';
+    const val      = (!esExento && puntsE[instId] !== undefined) ? puntsE[instId] : '';
+    const pct      = val !== '' ? ((Number(val)/inst.valor)*100).toFixed(1) : '--';
+    const nota     = pct !== '--' ? calcGrade(parseFloat(pct)) : '--';
+    return `<tr id="fila-${e.id}">
       <td><strong>${e.nombre}</strong></td>
-      <td><input type="number" min="0" max="${inst.valor}" id="punt-${e.id}" value="${val}" placeholder="0"
-        oninput="actualizarFilaPunt('${e.id}','${instId}',${inst.valor})"></td>
-      <td id="pct-${e.id}">${pct!=='--'?pct+'%':'--'}</td>
-      <td id="nota-${e.id}">${nota!=='--'?gradeBadge(nota):'--'}</td>
+      <td>
+        <input type="number" min="0" max="${inst.valor}" id="punt-${e.id}"
+          value="${esExento?'':val}" placeholder="0"
+          ${esExento?'disabled style="opacity:0.3"':''}
+          oninput="actualizarFilaPunt('${e.id}','${instId}',${inst.valor})">
+      </td>
+      <td>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:700;color:var(--accent);">
+          <input type="checkbox" id="exento-${e.id}" ${esExento?'checked':''}
+            onchange="toggleExento('${e.id}','${instId}',${inst.valor})"
+            style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+          Exento
+        </label>
+      </td>
+      <td id="pct-${e.id}">${esExento?'<span style="color:var(--accent);font-weight:800;">Exento</span>':(pct!=='--'?pct+'%':'--')}</td>
+      <td id="nota-${e.id}">${esExento?'<span style="background:var(--accent);color:white;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:800;">E</span>':(nota!=='--'?gradeBadge(nota):'--')}</td>
     </tr>`;
   }).join('');
 }
 window.cargarPuntuaciones = cargarPuntuaciones;
+
+function toggleExento(eId, instId, valorMax) {
+  const checkbox = document.getElementById('exento-'+eId);
+  const input    = document.getElementById('punt-'+eId);
+  const pctC     = document.getElementById('pct-'+eId);
+  const notaC    = document.getElementById('nota-'+eId);
+  if (checkbox.checked) {
+    input.value   = '';
+    input.disabled = true;
+    input.style.opacity = '0.3';
+    pctC.innerHTML  = '<span style="color:var(--accent);font-weight:800;">Exento</span>';
+    notaC.innerHTML = '<span style="background:var(--accent);color:white;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:800;">E</span>';
+  } else {
+    input.disabled  = false;
+    input.style.opacity = '1';
+    pctC.textContent  = '--';
+    notaC.innerHTML   = '--';
+  }
+}
+window.toggleExento = toggleExento;
 
 function actualizarFilaPunt(eId, instId, valorMax) {
   const input = document.getElementById('punt-'+eId);
@@ -614,11 +647,16 @@ async function guardarPuntuaciones() {
   const inst   = data.instrumentos.find(i => i.id === instId);
   if (!inst) { mostrarToast("⚠️ Instrumento no encontrado.", 'error'); return; }
   estudiantesGlobal.forEach(e => {
-    const input = document.getElementById('punt-'+e.id); if(!input) return;
+    const input    = document.getElementById('punt-'+e.id); if(!input) return;
+    const checkbox = document.getElementById('exento-'+e.id);
     if (!data.puntuaciones[e.id]) data.puntuaciones[e.id] = {};
-    const val = input.value;
-    if (val !== '') data.puntuaciones[e.id][instId] = Number(val);
-    else delete data.puntuaciones[e.id][instId];
+    if (checkbox && checkbox.checked) {
+      data.puntuaciones[e.id][instId] = 'E';
+    } else {
+      const val = input.value;
+      if (val !== '') data.puntuaciones[e.id][instId] = Number(val);
+      else delete data.puntuaciones[e.id][instId];
+    }
   });
   mostrarLoading(true);
   await saveDataMateria();
@@ -780,7 +818,7 @@ async function mostrarReporteEstudiante(estudiante) {
     B: ["¡Muy buen trabajo! 👏 ¡Estás en el camino correcto!","¡Lo estás haciendo muy bien! 💪 ¡Sigue así!","¡Qué progreso tan bonito! 😊 ¡Tú puedes llegar más alto!","¡Casi en la cima! 🌈 Un poquito más y llegas a la excelencia.","¡Eres un/a estudiante fantástico/a! 🌟"],
     C: ["¡Vas bien! 💡 Con más esfuerzo llegarás lejos.","¡Buen intento! 🌱 Cada día que estudias das un paso adelante.","¡Tú puedes mejorar! 💪 ¡El esfuerzo siempre tiene recompensa!","¡Sigue adelante! 🎯 Lo mejor está por venir.","¡No te rindas! 🌟 ¡Eres más capaz de lo que crees!"],
     D: ["¡Ánimo! 🤗 Aún hay tiempo para mejorar. ¡Tú puedes!","¡No te desanimes! 💛 Cada pequeño esfuerzo cuenta.","¡Sigue intentándolo! 🌈 Los grandes logros toman tiempo.","¡Pide ayuda cuando la necesites! 🙌 Juntos lo logramos.","¡Hoy es un buen día para empezar de nuevo! 🌅"],
-    F: ["¡No te rindas! 💪 Todavía puedes cambiar esto. ¡Yo creo en ti!","¡Cada día es una nueva oportunidad! 🌅","¡El esfuerzo de hoy es el éxito de mañana! 🌟","¡Habla con tu maestra, ella te puede ayudar! 🤝","¡Los campeones no se rinden! 🏆 ¡Este es tu momento!"]
+    F: ["¡No te rindas! 💪 Todavía puedes cambiar esto. ¡Yo creo en ti!","¡Cada día es una nueva oportunidad! 🌅","¡El esfuerzo de hoy es el éxito de mañana! 🌟","¡Habla con tu maestro, él te puede ayudar! 🤝","¡Los campeones no se rinden! 🏆 ¡Este es tu momento!"]
   };
 
   mostrarLoading(true);
@@ -792,7 +830,7 @@ async function mostrarReporteEstudiante(estudiante) {
     const punts = md.puntuaciones[estudiante.id]||{};
     md.instrumentos.forEach(inst => {
       const v = punts[inst.id];
-      if (v!==undefined&&v!=='') { totalObt+=Number(v); totalPos+=inst.valor; }
+      if (v!==undefined&&v!==''&&v!=='E') { totalObt+=Number(v); totalPos+=inst.valor; }
     });
   }
   mostrarLoading(false);
@@ -823,9 +861,11 @@ async function mostrarReporteEstudiante(estudiante) {
     const filas=[]; let obt=0,pos=0;
     md.instrumentos.forEach(inst => {
       const v = punts[inst.id];
-      if (v!==undefined&&v!=='') {
+      if (v === 'E') {
+        filas.push({inst, obtenido:'E', pct:'E', nota:'E', esExento:true});
+      } else if (v!==undefined&&v!=='') {
         const pct=((Number(v)/inst.valor)*100).toFixed(1);
-        filas.push({inst,obtenido:Number(v),pct,nota:calcGrade(parseFloat(pct))});
+        filas.push({inst,obtenido:Number(v),pct,nota:calcGrade(parseFloat(pct)),esExento:false});
         obt+=Number(v); pos+=inst.valor;
       }
     });
@@ -837,7 +877,14 @@ async function mostrarReporteEstudiante(estudiante) {
       tbodyHTML=`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Sin puntuaciones registradas aún</td></tr>`;
     } else {
       hayDato=true;
-      tbodyHTML=filas.map(row=>`
+      tbodyHTML=filas.map(row=> row.esExento ? `
+        <tr>
+          <td><strong>${row.inst.tipo}</strong></td><td>${row.inst.tema}</td>
+          <td>${formatDate(row.inst.fecha)}</td><td>${row.inst.valor}</td>
+          <td colspan="3" style="text-align:center;">
+            <span style="background:var(--accent);color:white;padding:4px 14px;border-radius:8px;font-size:12px;font-weight:800;">⭕ Exento</span>
+          </td>
+        </tr>` : `
         <tr>
           <td><strong>${row.inst.tipo}</strong></td><td>${row.inst.tema}</td>
           <td>${formatDate(row.inst.fecha)}</td><td>${row.inst.valor}</td>
