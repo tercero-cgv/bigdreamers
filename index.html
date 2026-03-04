@@ -479,7 +479,7 @@ async function setMode(mode) {
   );
   document.getElementById('view-maestro').classList.toggle('active', mode==='maestro');
   document.getElementById('view-estudiante').classList.toggle('active', mode==='estudiante');
-  if (mode === 'estudiante') { cerrarSesion(); await renderLoginSelect(); }
+  if (mode === 'estudiante') { cerrarSesion(); await renderLoginSelect(); aplicarEstadoConstruccion(); }
 }
 window.setMode = setMode;
 
@@ -845,6 +845,7 @@ async function renderLoginSelect() {
 }
 
 async function loginEstudiante() {
+  if (modoEnConstruccion) return;
   const eId    = document.getElementById('login-nombre').value;
   const codigo = document.getElementById('login-codigo').value.trim();
   const errDiv = document.getElementById('login-error');
@@ -862,6 +863,7 @@ async function loginEstudiante() {
 window.loginEstudiante = loginEstudiante;
 
 async function mostrarReporteEstudiante(estudiante) {
+  if (modoEnConstruccion) return;
   document.getElementById('login-screen').style.display  = 'none';
   document.getElementById('report-screen').style.display = 'block';
   document.getElementById('rep-avatar').textContent = estudiante.nombre.charAt(0).toUpperCase();
