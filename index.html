@@ -408,26 +408,39 @@ function mostrarLoading(show) {
 
 // ===================== MODO EN CONSTRUCCIÓN =====================
 let modoEnConstruccion = false;
-function toggleConstruccion() {
-  modoEnConstruccion = !modoEnConstruccion;
-  const banner   = document.getElementById('banner-construccion');
-  const login    = document.getElementById('login-screen');
-  const report   = document.getElementById('report-screen');
-  const btn      = document.getElementById('btn-construccion');
+
+async function cargarEstadoConstruccion() {
+  try {
+    const snap = await getDoc(doc(db, 'bigdreamers', 'config'));
+    modoEnConstruccion = snap.exists() ? (snap.data().enConstruccion || false) : false;
+  } catch(e) { modoEnConstruccion = false; }
+  aplicarEstadoConstruccion();
+}
+
+function aplicarEstadoConstruccion() {
+  const banner = document.getElementById('banner-construccion');
+  const login  = document.getElementById('login-screen');
+  const report = document.getElementById('report-screen');
+  const btn    = document.getElementById('btn-construccion');
   if (modoEnConstruccion) {
     banner.style.display = 'block';
     login.style.display  = 'none';
-    report.style.display = 'none';
-    btn.style.background = '#10B981';
-    btn.textContent      = '✅ Desactivar "En construcción"';
-    mostrarToast("🚧 Modo 'En construcción' activado", 'success');
+    if (report) report.style.display = 'none';
+    if (btn) { btn.style.background = '#10B981'; btn.textContent = '✅ Desactivar "En construcción"'; }
   } else {
     banner.style.display = 'none';
     login.style.display  = 'block';
-    btn.style.background = '#F59E0B';
-    btn.textContent      = '🚧 Activar "En construcción"';
-    mostrarToast("✅ Modo normal activado", 'success');
+    if (btn) { btn.style.background = '#F59E0B'; btn.textContent = '🚧 Activar "En construcción"'; }
   }
+}
+
+async function toggleConstruccion() {
+  modoEnConstruccion = !modoEnConstruccion;
+  try {
+    await setDoc(doc(db, 'bigdreamers', 'config'), { enConstruccion: modoEnConstruccion });
+  } catch(e) { mostrarToast("⚠️ Error guardando estado.", 'error'); return; }
+  aplicarEstadoConstruccion();
+  mostrarToast(modoEnConstruccion ? "🚧 'En construcción' activado" : "✅ Modo normal activado", 'success');
 }
 window.toggleConstruccion = toggleConstruccion;
 
@@ -972,6 +985,7 @@ window.cerrarSesion = cerrarSesion;
 async function init() {
   mostrarLoading(true);
   await loadDataMateria();
+  await cargarEstadoConstruccion();
   mostrarLoading(false);
   renderEstudiantes();
   renderInstrumentos();
