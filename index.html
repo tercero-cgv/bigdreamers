@@ -122,6 +122,9 @@
       📥 Importar respaldo
       <input type="file" id="inp-importar" accept=".json" style="display:none" onchange="importarRespaldo(event)">
     </label>
+    <button id="btn-construccion" class="btn btn-sm"
+      style="background:#F59E0B; color:white;"
+      onclick="toggleConstruccion()">🚧 Activar "En construcción"</button>
   </div>
 
   <div class="materia-toggle">
@@ -253,6 +256,19 @@
 
 <!-- VISTA ESTUDIANTE -->
 <div id="view-estudiante" class="view active">
+
+  <!-- Banner En Construcción (visible cuando está activado) -->
+  <div id="banner-construccion" style="display:none; text-align:center; padding:60px 20px;">
+    <div style="max-width:480px; margin:0 auto; background:white; border-radius:24px; padding:48px 32px; box-shadow:0 8px 40px rgba(108,60,225,0.15);">
+      <div style="font-size:72px; margin-bottom:20px;">🚧</div>
+      <h2 style="font-family:'Nunito',sans-serif; font-size:28px; font-weight:900; color:var(--primary); margin-bottom:12px;">¡Próximamente!</h2>
+      <p style="color:var(--muted); font-size:16px; font-weight:600; line-height:1.6;">Estamos actualizando tus puntuaciones.<br>¡Vuelve pronto para verlas! ⭐</p>
+      <div style="margin-top:28px; padding:16px; background:var(--bg); border-radius:12px;">
+        <p style="color:var(--primary); font-size:14px; font-weight:700;">BigDreamers - Tercer Grado Lozada 🌟</p>
+      </div>
+    </div>
+  </div>
+
   <div id="login-screen">
     <div class="login-box">
       <div class="big-icon">🎒</div>
@@ -389,6 +405,31 @@ function mostrarToast(mensaje, type='success') {
 function mostrarLoading(show) {
   document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none';
 }
+
+// ===================== MODO EN CONSTRUCCIÓN =====================
+let modoEnConstruccion = false;
+function toggleConstruccion() {
+  modoEnConstruccion = !modoEnConstruccion;
+  const banner   = document.getElementById('banner-construccion');
+  const login    = document.getElementById('login-screen');
+  const report   = document.getElementById('report-screen');
+  const btn      = document.getElementById('btn-construccion');
+  if (modoEnConstruccion) {
+    banner.style.display = 'block';
+    login.style.display  = 'none';
+    report.style.display = 'none';
+    btn.style.background = '#10B981';
+    btn.textContent      = '✅ Desactivar "En construcción"';
+    mostrarToast("🚧 Modo 'En construcción' activado", 'success');
+  } else {
+    banner.style.display = 'none';
+    login.style.display  = 'block';
+    btn.style.background = '#F59E0B';
+    btn.textContent      = '🚧 Activar "En construcción"';
+    mostrarToast("✅ Modo normal activado", 'success');
+  }
+}
+window.toggleConstruccion = toggleConstruccion;
 
 // ===================== CAMBIO DE MATERIA =====================
 async function cambiarMateria(materia) {
