@@ -533,16 +533,52 @@ function renderEstudiantes() {
     .map((e,i) => {
       const pct = promedioEstudiante(e.id);
       const nota = pct !== null ? calcGrade(pct) : '--';
-      return `<tr>
+      return `<tr id="est-row-${e.id}">
         <td>${i+1}</td>
-        <td><strong>${e.nombre}</strong></td>
-        <td><code style="background:#EDE9FE;padding:3px 8px;border-radius:6px;color:var(--primary);font-weight:700">${e.codigo}</code></td>
+        <td id="est-nombre-${e.id}"><strong>${e.nombre}</strong></td>
+        <td id="est-codigo-${e.id}"><code style="background:#EDE9FE;padding:3px 8px;border-radius:6px;color:var(--primary);font-weight:700">${e.codigo}</code></td>
         <td>${pct !== null ? pct.toFixed(1)+'%' : '--'}</td>
         <td>${pct !== null ? gradeBadge(nota) : '--'}</td>
-        <td><button class="btn btn-danger btn-sm" onclick="eliminarEstudiante('${e.id}')">Eliminar</button></td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="editarEstudiante('${e.id}')">✏️ Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarEstudiante('${e.id}')">Eliminar</button>
+        </td>
       </tr>`;
     }).join('');
 }
+
+function editarEstudiante(id) {
+  const est = estudiantesGlobal.find(e => e.id === id); if(!est) return;
+  document.getElementById('est-nombre-'+id).innerHTML =
+    `<input type="text" id="edit-nombre-${id}" value="${est.nombre}"
+      style="padding:6px 10px;border:2px solid var(--primary-light);border-radius:8px;font-family:'Quicksand',sans-serif;font-size:13px;font-weight:600;width:100%;">`;
+  document.getElementById('est-codigo-'+id).innerHTML =
+    `<input type="text" id="edit-codigo-${id}" value="${est.codigo}"
+      style="padding:6px 10px;border:2px solid var(--primary-light);border-radius:8px;font-family:'Quicksand',sans-serif;font-size:13px;font-weight:600;width:90px;">`;
+  const td = document.querySelector(`#est-row-${id} td:last-child`);
+  td.innerHTML = `
+    <button class="btn btn-success btn-sm" onclick="guardarEstudiante('${id}')">💾 Guardar</button>
+    <button class="btn btn-sm" style="background:var(--border);color:var(--text);" onclick="renderEstudiantes()">Cancelar</button>`;
+}
+window.editarEstudiante = editarEstudiante;
+
+async function guardarEstudiante(id) {
+  const nuevoNombre = document.getElementById('edit-nombre-'+id)?.value.trim();
+  const nuevoCodigo = document.getElementById('edit-codigo-'+id)?.value.trim();
+  if (!nuevoNombre) return mostrarToast("⚠️ El nombre no puede estar vacío.", 'error');
+  if (!nuevoCodigo) return mostrarToast("⚠️ El código no puede estar vacío.", 'error');
+  const duplicado = estudiantesGlobal.find(e => e.codigo === nuevoCodigo && e.id !== id);
+  if (duplicado) return mostrarToast("⚠️ Ese código ya lo usa otro estudiante.", 'error');
+  const est = estudiantesGlobal.find(e => e.id === id); if(!est) return;
+  est.nombre = nuevoNombre;
+  est.codigo = nuevoCodigo;
+  mostrarLoading(true);
+  await saveDataMateria();
+  mostrarLoading(false);
+  renderEstudiantes();
+  mostrarToast("✅ Estudiante actualizado correctamente.", 'success');
+}
+window.guardarEstudiante = guardarEstudiante;
 
 async function eliminarEstudiante(id) {
   if (!confirm('¿Eliminar este estudiante y todas sus puntuaciones?')) return;
@@ -590,12 +626,62 @@ function renderInstrumentos() {
     return;
   }
   tbody.innerHTML = data.instrumentos.map((inst,i) => `
-    <tr>
-      <td>${i+1}</td><td><strong>${inst.tipo}</strong></td><td>${inst.tema}</td>
-      <td>${formatDate(inst.fecha)}</td><td><strong>${inst.valor} pts</strong></td>
-      <td><button class="btn btn-danger btn-sm" onclick="eliminarInstrumento('${inst.id}')">Eliminar</button></td>
+    <tr id="inst-row-${inst.id}">
+      <td>${i+1}</td>
+      <td id="inst-tipo-${inst.id}"><strong>${inst.tipo}</strong></td>
+      <td id="inst-tema-${inst.id}">${inst.tema}</td>
+      <td id="inst-fecha-${inst.id}">${formatDate(inst.fecha)}</td>
+      <td id="inst-valor-${inst.id}"><strong>${inst.valor} pts</strong></td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="editarInstrumento('${inst.id}')">✏️ Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarInstrumento('${inst.id}')">Eliminar</button>
+      </td>
     </tr>`).join('');
 }
+
+function editarInstrumento(id) {
+  const inst = data.instrumentos.find(i => i.id === id); if(!inst) return;
+  const tipos = ['Assessment','Pre-Prueba','Prueba Corta','Tarea Desempeño','Trabajo Especial','Otro'];
+  document.getElementById('inst-tipo-'+id).innerHTML =
+    `<select id="edit-tipo-${id}" style="padding:6px;border:2px solid var(--primary-light);border-radius:8px;font-family:'Quicksand',sans-serif;font-size:13px;font-weight:600;">
+      ${tipos.map(t=>`<option ${t===inst.tipo?'selected':''}>${t}</option>`).join('')}
+    </select>`;
+  document.getElementById('inst-tema-'+id).innerHTML =
+    `<input type="text" id="edit-tema-${id}" value="${inst.tema}"
+      style="padding:6px 10px;border:2px solid var(--primary-light);border-radius:8px;font-family:'Quicksand',sans-serif;font-size:13px;font-weight:600;width:100%;">`;
+  document.getElementById('inst-fecha-'+id).innerHTML =
+    `<input type="date" id="edit-fecha-${id}" value="${inst.fecha||''}"
+      style="padding:6px;border:2px solid var(--primary-light);border-radius:8px;font-family:'Quicksand',sans-serif;font-size:13px;font-weight:600;">`;
+  document.getElementById('inst-valor-'+id).innerHTML =
+    `<input type="number" id="edit-valor-${id}" value="${inst.valor}" min="1"
+      style="padding:6px;border:2px solid var(--primary-light);border-radius:8px;font-family:'Quicksand',sans-serif;font-size:13px;font-weight:600;width:70px;">`;
+  const td = document.querySelector(`#inst-row-${id} td:last-child`);
+  td.innerHTML = `
+    <button class="btn btn-success btn-sm" onclick="guardarInstrumento('${id}')">💾 Guardar</button>
+    <button class="btn btn-sm" style="background:var(--border);color:var(--text);" onclick="renderInstrumentos()">Cancelar</button>`;
+}
+window.editarInstrumento = editarInstrumento;
+
+async function guardarInstrumento(id) {
+  const tipo  = document.getElementById('edit-tipo-'+id)?.value.trim();
+  const tema  = document.getElementById('edit-tema-'+id)?.value.trim();
+  const fecha = document.getElementById('edit-fecha-'+id)?.value;
+  const valor = parseFloat(document.getElementById('edit-valor-'+id)?.value);
+  if (!tema)            return mostrarToast("⚠️ El tema no puede estar vacío.", 'error');
+  if (!valor||valor<=0) return mostrarToast("⚠️ El valor debe ser mayor a 0.", 'error');
+  const inst = data.instrumentos.find(i => i.id === id); if(!inst) return;
+  inst.tipo  = tipo;
+  inst.tema  = tema;
+  inst.fecha = fecha;
+  inst.valor = valor;
+  mostrarLoading(true);
+  await saveDataMateria();
+  mostrarLoading(false);
+  renderInstrumentos();
+  renderInstrumentoSelect();
+  mostrarToast("✅ Instrumento actualizado correctamente.", 'success');
+}
+window.guardarInstrumento = guardarInstrumento;
 
 async function eliminarInstrumento(id) {
   if (!confirm('¿Eliminar este instrumento? También se borrarán sus puntuaciones.')) return;
