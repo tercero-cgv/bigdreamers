@@ -353,10 +353,21 @@ async function loadDataMateria() {
     data = dataSnap.exists()
       ? { instrumentos: dataSnap.data().instrumentos || [], puntuaciones: dataSnap.data().puntuaciones || {} }
       : { instrumentos: [], puntuaciones: {} };
+    return true;
   } catch(e) {
     console.error("Error cargando:", e);
     mostrarToast("⚠️ Error al cargar datos. Verifica tu conexión.", 'error');
+    return false;
   }
+}
+
+// Recarga lo último de Firebase ANTES de modificar y guardar, para no pisar
+// instrumentos/puntuaciones que Roll Book (u otro dispositivo) haya enviado.
+// Si no se puede recargar, se aborta: nunca guardar con datos viejos.
+async function refrescarAntesDeGuardar() {
+  const ok = await loadDataMateria();
+  if (!ok) mostrarToast("⚠️ No se guardó: no se pudo verificar la versión más reciente.", 'error');
+  return ok;
 }
 
 async function loadMateriaData(materiaKey) {
@@ -462,7 +473,6 @@ async function cambiarMateria(materia) {
   document.getElementById('tbody-puntuaciones').innerHTML = '';
 
   mostrarLoading(true);
-  await saveDataMateria();
   currentMateria = materia;
   await loadDataMateria();
   mostrarLoading(false);
@@ -519,10 +529,13 @@ async function agregarEstudiante() {
   const codigo = document.getElementById('inp-codigo').value.trim();
   if (!nombre) return showAlert('alert-estudiante', 'Escribe el nombre del estudiante.');
   if (!codigo) return showAlert('alert-estudiante', 'Escribe un código para el estudiante.');
-  if (estudiantesGlobal.find(e => e.codigo === codigo))
-    return showAlert('alert-estudiante', 'Ese código ya existe, usa uno diferente.');
-  estudiantesGlobal.push({ id: uid(), nombre, codigo });
   mostrarLoading(true);
+  if (!(await refrescarAntesDeGuardar())) { mostrarLoading(false); return; }
+  if (estudiantesGlobal.find(e => e.codigo === codigo)) {
+    mostrarLoading(false);
+    return showAlert('alert-estudiante', 'Ese código ya existe, usa uno diferente.');
+  }
+  estudiantesGlobal.push({ id: uid(), nombre, codigo });
   await saveDataMateria();
   mostrarLoading(false);
   document.getElementById('inp-nombre').value = '';
@@ -577,12 +590,14 @@ async function guardarEstudiante(id) {
   const nuevoCodigo = document.getElementById('edit-codigo-'+id)?.value.trim();
   if (!nuevoNombre) return mostrarToast("⚠️ El nombre no puede estar vacío.", 'error');
   if (!nuevoCodigo) return mostrarToast("⚠️ El código no puede estar vacío.", 'error');
+  mostrarLoading(true);
+  if (!(await refrescarAntesDeGuardar())) { mostrarLoading(false); return; }
   const duplicado = estudiantesGlobal.find(e => e.codigo === nuevoCodigo && e.id !== id);
-  if (duplicado) return mostrarToast("⚠️ Ese código ya lo usa otro estudiante.", 'error');
-  const est = estudiantesGlobal.find(e => e.id === id); if(!est) return;
+  if (duplicado) { mostrarLoading(false); return mostrarToast("⚠️ Ese código ya lo usa otro estudiante.", 'error'); }
+  const est = estudiantesGlobal.find(e => e.id === id);
+  if (!est) { mostrarLoading(false); return; }
   est.nombre = nuevoNombre;
   est.codigo = nuevoCodigo;
-  mostrarLoading(true);
   await saveDataMateria();
   mostrarLoading(false);
   renderEstudiantes();
@@ -592,9 +607,10 @@ window.guardarEstudiante = guardarEstudiante;
 
 async function eliminarEstudiante(id) {
   if (!confirm('¿Eliminar este estudiante y todas sus puntuaciones?')) return;
+  mostrarLoading(true);
+  if (!(await refrescarAntesDeGuardar())) { mostrarLoading(false); return; }
   estudiantesGlobal = estudiantesGlobal.filter(e => e.id !== id);
   delete data.puntuaciones[id];
-  mostrarLoading(true);
   await saveDataMateria();
   mostrarLoading(false);
   renderEstudiantes();
@@ -617,8 +633,9 @@ async function agregarInstrumento() {
   const valor = parseFloat(document.getElementById('inp-valor').value);
   if (!tema)           return showAlert('alert-instrumento', 'Escribe el tema del instrumento.');
   if (!valor||valor<=0) return showAlert('alert-instrumento', 'Escribe un valor válido mayor a 0.');
-  data.instrumentos.push({ id: uid(), tipo, tema, fecha, valor });
   mostrarLoading(true);
+  if (!(await refrescarAntesDeGuardar())) { mostrarLoading(false); return; }
+  data.instrumentos.push({ id: uid(), tipo, tema, fecha, valor });
   await saveDataMateria();
   mostrarLoading(false);
   document.getElementById('inp-tema').value  = '';
@@ -679,12 +696,14 @@ async function guardarInstrumento(id) {
   const valor = parseFloat(document.getElementById('edit-valor-'+id)?.value);
   if (!tema)            return mostrarToast("⚠️ El tema no puede estar vacío.", 'error');
   if (!valor||valor<=0) return mostrarToast("⚠️ El valor debe ser mayor a 0.", 'error');
-  const inst = data.instrumentos.find(i => i.id === id); if(!inst) return;
+  mostrarLoading(true);
+  if (!(await refrescarAntesDeGuardar())) { mostrarLoading(false); return; }
+  const inst = data.instrumentos.find(i => i.id === id);
+  if (!inst) { mostrarLoading(false); return mostrarToast("⚠️ El instrumento ya no existe.", 'error'); }
   inst.tipo  = tipo;
   inst.tema  = tema;
   inst.fecha = fecha;
   inst.valor = valor;
-  mostrarLoading(true);
   await saveDataMateria();
   mostrarLoading(false);
   renderInstrumentos();
@@ -695,9 +714,10 @@ window.guardarInstrumento = guardarInstrumento;
 
 async function eliminarInstrumento(id) {
   if (!confirm('¿Eliminar este instrumento? También se borrarán sus puntuaciones.')) return;
-  data.instrumentos = data.instrumentos.filter(i => i.id !== id);
-  Object.keys(data.puntuaciones).forEach(eId => { delete data.puntuaciones[eId][id]; });
   mostrarLoading(true);
+  if (!(await refrescarAntesDeGuardar())) { mostrarLoading(false); return; }
+  data.instrumentos = data.instrumentos.filter(i => i.id !== id);
+  Object.keys(data.puntuaciones).forEach(eId => { if (data.puntuaciones[eId]) delete data.puntuaciones[eId][id]; });
   await saveDataMateria();
   mostrarLoading(false);
   renderInstrumentos();
@@ -795,8 +815,10 @@ window.actualizarFilaPunt = actualizarFilaPunt;
 
 async function guardarPuntuaciones() {
   const instId = document.getElementById('sel-instrumento').value; if(!instId) return;
+  mostrarLoading(true);
+  if (!(await refrescarAntesDeGuardar())) { mostrarLoading(false); return; }
   const inst   = data.instrumentos.find(i => i.id === instId);
-  if (!inst) { mostrarToast("⚠️ Instrumento no encontrado.", 'error'); return; }
+  if (!inst) { mostrarLoading(false); mostrarToast("⚠️ Instrumento no encontrado.", 'error'); return; }
   estudiantesGlobal.forEach(e => {
     const input    = document.getElementById('punt-'+e.id); if(!input) return;
     const checkbox = document.getElementById('exento-'+e.id);
@@ -809,7 +831,6 @@ async function guardarPuntuaciones() {
       else delete data.puntuaciones[e.id][instId];
     }
   });
-  mostrarLoading(true);
   await saveDataMateria();
   mostrarLoading(false);
   renderEstudiantes();
@@ -876,14 +897,15 @@ window.exportarCSV = exportarCSV;
 // ===================== RESPALDO =====================
 async function exportarRespaldo() {
   mostrarLoading(true);
-  await saveDataMateria();
+  const estSnapR = await getDoc(doc(db, 'bigdreamers', 'estudiantes'));
+  const estudiantesR = estSnapR.exists() ? (estSnapR.data().lista || []) : [];
   const adl  = await loadMateriaData('ADL');
   const mat  = await loadMateriaData('Matematica');
   const cie  = await loadMateriaData('Ciencia');
   mostrarLoading(false);
   const respaldo = {
     version: 2, fecha: new Date().toISOString(),
-    estudiantes: estudiantesGlobal,
+    estudiantes: estudiantesR,
     ADL: adl, Matematica: mat, Ciencia: cie
   };
   const blob = new Blob([JSON.stringify(respaldo,null,2)],{type:'application/json'});
